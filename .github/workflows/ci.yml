@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать образ
+        run: docker build -t brevo-mail-service .
+      - name: Запустить и спросить /health
+        run: |
+          docker run -d --name mail -p 8080:8080 \
+            -e SERVICE_TOKEN=ci -e CODE_SECRET=ci -e "MAIL_FROM=CI <noreply@example.com>" \
+            brevo-mail-service
+          for i in $(seq 1 20); do curl -fs localhost:8080/health && exit 0; sleep 1; done
+          docker logs mail; exit 1
